@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09111f">
+  <title>CampusFlow AI · Campus Operations</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/data-manager.css') }}">
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <div class="app-shell" id="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#home" data-view="home"><span class="brand-mark">✦</span><span>CampusFlow <b>AI</b></span></a>
+      <div class="workspace"><span class="presence"></span> Campus Operations <small>LIVE</small></div>
+      <nav aria-label="Primary navigation">
+        <a href="#dashboard" data-view="dashboard" data-admin-only><i>▦</i> Dashboard</a>
+        <a href="#create" data-view="create" data-admin-only><i>＋</i> Create event</a>
+        <a href="#agents" data-view="agents" data-admin-only><i>✦</i> AI agents</a>
+        <a href="#resources" data-view="resources" data-admin-only><i>◌</i> Resources</a>
+        <a href="#data" data-view="data" data-admin-only><i>DB</i> Data manager</a>
+        <a href="#venues" data-view="venues" data-admin-only><i>⌘</i> Venues</a>
+        <a href="#member-dashboard" data-view="member-dashboard" data-member-only><i>▦</i> Dashboard</a>
+        <a href="#profile" data-view="profile" data-member-only><i>◉</i> My profile</a>
+        <a href="#attendance" data-view="attendance" data-member-only><i>✓</i> Attendance</a>
+      </nav>
+      <div class="side-bottom"><span class="dot"></span><span id="storage-mode">Connecting system...</span></div>
+    </aside>
+    <main class="main-content">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">✦</span> CampusFlow AI</div>
+        <div class="top-actions"><button class="icon-button" id="notification-button" data-admin-only aria-label="Operations notifications">◌<em id="notification-count">0</em></button><button class="icon-button" id="mail-button" data-member-only aria-label="Mailbox">✉<em id="mail-count">0</em></button><button class="profile" id="profile-button" data-action="logout">Sign in <span>Account</span></button></div>
+      </header>
+
+      <section class="view" id="view-login">
+        <div class="login-wrap panel">
+          <div class="eyebrow"><span></span> Secure access</div>
+          <h2>Sign in to CampusFlow</h2>
+          <div class="login-tabs tabs" role="tablist" aria-label="Sign-in type">
+            <button type="button" class="active" data-login-tab="staff">Faculty / Volunteer</button>
+            <button type="button" data-login-tab="admin">Administrator</button>
+          </div>
+          <form id="login-form" class="login-form">
+            <div id="staff-role-toggle" class="role-toggle">
+              <button type="button" class="role-option active" data-staff-role="volunteer">Volunteer</button>
+              <button type="button" class="role-option" data-staff-role="faculty">Faculty</button>
+            </div>
+            <label id="username-label">Volunteer ID<input name="username" autocomplete="username" placeholder="Enter your volunteer ID" required></label>
+            <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+            <button class="primary" type="submit">Sign in <b>→</b></button>
+          </form>
+          <p class="login-note" id="login-note">Use the Volunteer or Faculty ID and password supplied by your CampusFlow administrator.</p>
+        </div>
+      </section>
+
+      <section class="view" id="view-home">
+        <div class="hero-grid">
+          <div class="hero-copy"><div class="eyebrow"><span></span> Autonomous campus operations</div><h1>Plan. Assign.<br><em>Coordinate. Adapt.</em></h1><p>CampusFlow converts an event brief into a constraint-validated operations plan—then keeps humans in control of every lock and change.</p><div class="hero-actions"><button class="primary" data-go="create">Create an event <b>→</b></button><button class="secondary" data-go="campus">Explore campus</button></div><div class="proof"><span><strong>7</strong> specialist agents</span><span><strong>100%</strong> constraint checked</span><span><strong>Human</strong> approvals</span></div></div>
+          <div class="hero-visual glass"><div class="visual-top"><span class="pulse"></span> AI planning pulse <span>LIVE</span></div><div class="flow-orb">✦</div><div class="flow-lines"><span></span><span></span><span></span></div><div class="agent-mini a1">Understanding <b>✓</b></div><div class="agent-mini a2">Resources <b>✓</b></div><div class="agent-mini a3">Constraints <b>✓</b></div><div class="visual-foot">From natural language to a locked, explainable plan.</div></div>
+        </div>
+        <div class="landing-strip"><span>BUILT FOR</span><b>Campus events</b><b>Hackathons</b><b>Workshops</b><b>Seminars</b><b>Multi-day operations</b></div>
+      </section>
+
+      <section class="view" id="view-dashboard">
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Operations overview</div><h2>Command center</h2><p>Campus activity, resource health and AI coordination in one place.</p></div><button class="primary" data-go="create">＋ New event</button></div>
+        <div id="metric-grid" class="metric-grid skeleton-grid"></div>
+        <div class="dashboard-columns"><div class="panel events-panel"><div class="panel-title"><div><span class="label">EVENTS</span><h3>Add or edit events</h3></div><button class="text-button" data-go="create">Add event →</button></div><div id="active-events" class="event-list"></div></div><div class="panel activity-panel"><div class="panel-title"><div><span class="label">SYSTEM SIGNAL</span><h3>AI activity</h3></div><span class="live-chip">● live</span></div><div id="activity-list" class="activity-list"></div></div></div>
+        <div id="dashboard-event-editor"></div>
+      </section>
+
+      <section class="view" id="view-create">
+        <div class="create-wrap"><div class="eyebrow"><span></span> New operational brief</div><h2>What are we planning?</h2><p class="lead">Describe the outcome in your own words. The agents will turn it into a transparent, constraint-checked plan.</p><div class="prompt-card panel"><label for="event-prompt">EVENT REQUEST</label><textarea id="event-prompt" maxlength="4000" placeholder="Plan a 1-day AI Hackathon for 120 students with 2 faculty members, 5 volunteers, 1 guest speaker, computer labs, projectors and microphones."></textarea><div class="prompt-foot"><span>Gemini extracts requirements. CampusFlow verifies every resource.</span><button class="primary" id="generate-plan">Generate AI plan <b>✦</b></button></div></div><div class="brief-hints"><button data-prompt="Plan a 1-day AI Hackathon for 120 students.">AI Hackathon · 120 students</button><button data-prompt="Plan a cyber security workshop for 60 students with 2 faculty and projectors.">Security Workshop · 60 students</button><button data-prompt="Plan a startup pitch seminar for 150 students with 1 faculty and 1 guest speaker.">Startup Seminar · 150 students</button></div></div>
+      </section>
+
+      <section class="view" id="view-planning">
+        <div class="planning-head"><div><div class="eyebrow"><span></span> Multi-agent orchestration</div><h2 id="planning-title">Building your event plan</h2><p id="planning-subtitle">Specialists are translating the brief into a safe operational proposal.</p></div><div class="planning-status"><span class="pulse"></span><span id="planning-status-text">ANALYSING</span></div></div><div id="agent-workflow" class="workflow"></div><div id="planning-result" class="planning-result"></div>
+      </section>
+
+      <section class="view" id="view-event">
+        <div id="event-command"></div>
+      </section>
+
+      <section class="view" id="view-schedule">
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Campus timeline</div><h2>Schedule intelligence</h2><p>Time-slot assignments are the source of truth for availability.</p></div><div class="date-pill">NEXT 45 DAYS</div></div><div id="schedule-board" class="panel schedule-board"></div>
+      </section>
+
+      <section class="view" id="view-resources">
+        <form id="availability-form" class="panel availability-search"><input name="name" placeholder="Faculty or resource name" required><input name="start_datetime" type="datetime-local" required><input name="end_datetime" type="datetime-local" required><button class="secondary" type="submit">Check availability</button><span id="availability-result"></span></form>
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Resource directory</div><h2>Resources</h2><p>Add and maintain people, labs, equipment and vehicles. Availability is calculated from time-slot assignments.</p></div><button class="primary" data-action="add-resource">Add resource <b>+</b></button></div><div id="resource-tabs" class="tabs"></div><div id="resource-grid" class="resource-grid"></div>
+      </section>
+
+      <section class="view" id="view-venues">
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Space directory</div><h2 id="venue-heading">Venues</h2><p id="venue-description">Add and manage campus venues. The AI only selects venues that meet the event requirements and are free at the chosen time.</p></div><button class="primary" id="venue-add-button" data-action="add-venue-or-block">Add venue <b>+</b></button></div><div id="venue-tabs" class="tabs"></div><div id="venue-grid" class="resource-grid"></div>
+      </section>
+
+      <section class="view" id="view-data">
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Your campus records</div><h2>Data manager</h2><p>Add your real campus resources directly into CampusFlow. IDs are generated automatically when left blank.</p></div></div>
+        <div id="data-tabs" class="tabs"></div>
+        <div class="data-layout"><article class="panel data-form-panel"><div id="data-form-content"></div></article><article class="panel data-record-panel"><div class="panel-title"><div><span class="label">SAVED RECORDS</span><h3 id="data-record-title">Faculty</h3></div><span id="data-record-count" class="live-chip"></span></div><div id="data-record-list" class="data-record-list"></div></article></div>
+      </section>
+
+      <section class="view" id="view-member-dashboard">
+        <div id="member-dashboard"></div>
+      </section>
+
+      <section class="view" id="view-profile">
+        <div id="member-profile"></div>
+      </section>
+
+      <section class="view" id="view-attendance">
+        <div id="member-attendance"></div>
+      </section>
+
+      <section class="view" id="view-campus">
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Physical campus model</div><h2>Campus explorer</h2><p>Replace the prepared image placeholders in <code>static/images/</code> with your real campus photography.</p></div></div><div id="campus-grid" class="campus-grid"></div><div id="lab-drawer" class="lab-drawer"></div>
+      </section>
+
+      <section class="view" id="view-conflicts">
+        <div class="page-heading"><div><div class="eyebrow danger"><span></span> Intervention queue</div><h2>Conflict center</h2><p>Every constraint breach has a traceable impact and a human decision.</p></div></div><div id="conflict-list" class="conflict-list"></div>
+      </section>
+
+      <section class="view" id="view-agents">
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Decision network</div><h2>AI agent network</h2><p>Specialists propose; the deterministic constraint engine decides.</p></div></div><div id="agent-network" class="agent-network"></div>
+      </section>
+
+      <section class="view" id="view-audit">
+        <div class="page-heading"><div><div class="eyebrow"><span></span> Governance record</div><h2>Audit trail</h2><p>An immutable-style operational timeline for every important system action.</p></div></div><div id="audit-list" class="audit-list panel"></div>
+      </section>
+    </main>
+  </div>
+  <div id="notification-panel" class="notification-panel"></div>
+  <div id="mail-panel" class="notification-panel"></div>
+  <div id="toast-area" class="toast-area"></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
