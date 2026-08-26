@@ -11,7 +11,6 @@ from agents.replanning_agent import run as generate_replan
 from agents.venue_agent import recommend_labs, recommend_venues
 from services.audit_service import audit, notify
 from services.constraint_engine import validate_plan
-from services.email_service import send_email
 from services.matching_service import score_person
 from routes.helpers import api_error, store
 
@@ -135,10 +134,10 @@ def recheck_resources(event_id, resource_type):
     else:
         matches = recommend_venues(store(), requirements, plan["start_datetime"], plan["end_datetime"], exclude_event_id=event_id if event.get("status") == "approved" else None)[:1]
     current_matches = plan.get(resource_type, [])
-    current_score = min((item.get("score", 0) for item in current_matches), default=0)
-    new_score = min((item.get("score", 0) for item in matches), default=0)
-    improved = bool(matches) and (not current_matches or new_score > current_score)
-    if improved:
+    current_ids = [item.get("resource_id") for item in current_matches]
+    fresh_ids = [item.get("resource_id") for item in matches]
+    changed = bool(matches) and fresh_ids != current_ids
+    if matches:
         plan[resource_type] = matches
     else:
         matches = current_matches
@@ -147,7 +146,7 @@ def recheck_resources(event_id, resource_type):
     counts = dict(event.get("resource_recheck_counts", {}))
     counts[resource_type] = counts.get(resource_type, 0) + 1
     updated = store().update_one("events", {"event_id": event_id}, {"proposed_plan": plan, "active_plan": plan if event.get("status") == "approved" else event.get("active_plan"), "validation": validation, "status": status, "resource_recheck_counts": counts})
-    return jsonify({"ok": validation["valid"], "updated": improved, "count": counts[resource_type], "matches": matches, "event": updated, "validation": validation})
+    return jsonify({"ok": validation["valid"], "updated": changed, "best_fit": bool(matches), "count": counts[resource_type], "matches": matches, "event": updated, "validation": validation})
 
 
 @bp.post("/<event_id>/replan-timeline")
@@ -158,12 +157,14 @@ def replan_timeline(event_id):
         return api_error("A generated event plan is required first.", 404)
     current = plan.get("timeline", [])
     proposed = _timeline_for(_requirements(event_id))
-    improved_or_equal = _timeline_quality(proposed) >= _timeline_quality(current)
-    if improved_or_equal:
+    current_quality = _timeline_quality(current)
+    proposed_quality = _timeline_quality(proposed)
+    improved = proposed_quality > current_quality
+    if improved:
         plan["timeline"] = proposed
     count = event.get("timeline_replan_count", 0) + 1
     updated = store().update_one("events", {"event_id": event_id}, {"active_plan": plan if event.get("status") == "approved" else event.get("active_plan"), "proposed_plan": plan, "timeline_replan_count": count})
-    return jsonify({"ok": True, "updated": improved_or_equal, "count": count, "timeline": plan.get("timeline", []), "event": updated})
+    return jsonify({"ok": True, "updated": improved, "best_fit": True, "count": count, "timeline": plan.get("timeline", []), "event": updated})
 
 
 @bp.post("/<event_id>/simulate-conflict")
@@ -308,7 +309,7 @@ def _lock_plan(event_id, plan):
 
 
 def _notify_assigned_people(event_id, plan):
-    """Send member notices and optional email after the approved event is saved."""
+    """Send in-app assignment notices after the approved event is saved."""
     event = store().get_one("events", {"event_id": event_id}) or {}
     when = plan["start_datetime"].replace("T", " ")
     recipients = {
@@ -316,25 +317,13 @@ def _notify_assigned_people(event_id, plan):
         "volunteers": ("volunteers", "volunteer_id"),
         "guests": ("guests", "guest_id"),
     }
-    for group, (collection, id_key) in recipients.items():
+    for group, (_collection, _id_key) in recipients.items():
         for item in plan.get(group, []):
-            person = store().get_one(collection, {id_key: item["resource_id"]}) or {}
-            person_name = person.get("name") or item.get("name") or "Campus member"
             is_member = group in {"faculty", "volunteers"}
             message = f"You have been assigned to {event.get('title', 'a campus event')} on {when}."
             if is_member:
                 message += " Please sign in to CampusFlow to accept or decline the assignment."
                 notify(store(), "New event assignment", message, event_id, "info", item["resource_id"], item["resource_type"])
-            delivery = send_email(
-                current_app.config,
-                person.get("email", ""),
-                f"CampusFlow assignment: {event.get('title', 'Campus event')}",
-                f"Hello {person_name},\n\n{message}\n\nCampusFlow AI",
-            )
-            if delivery == "sent":
-                audit(store(), "Assignment email sent", event_id, f"Email sent to {group}: {item['resource_id']}")
-            elif delivery == "failed":
-                audit(store(), "Assignment email failed", event_id, f"Email delivery failed for {group}: {item['resource_id']}")
 
 
 def _release_assignments(event_id):

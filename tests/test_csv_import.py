@@ -1,6 +1,8 @@
 import io
 import unittest
 
+from werkzeug.security import check_password_hash
+
 from flask import Flask
 
 from database.mongo import MemoryStore
@@ -10,7 +12,7 @@ from routes.resources import bp as resources_bp
 class CsvImportTests(unittest.TestCase):
     def make_client(self):
         app = Flask(__name__)
-        app.config.update(SECRET_KEY="test-secret", DEFAULT_MEMBER_PASSWORD="campus123")
+        app.config.update(SECRET_KEY="test-secret")
         app.extensions["campusflow_store"] = MemoryStore()
         app.register_blueprint(resources_bp)
         client = app.test_client()
@@ -43,7 +45,9 @@ class CsvImportTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()["imported"], 2)
         self.assertEqual(len(app.extensions["campusflow_store"].get_all("faculty")), 2)
-        self.assertIsNotNone(app.extensions["campusflow_store"].get_one("users", {"username": "FAC101"}))
+        account = app.extensions["campusflow_store"].get_one("users", {"username": "FAC101"})
+        self.assertIsNotNone(account)
+        self.assertTrue(check_password_hash(account["password_hash"], "FAC101"))
 
     def test_invalid_csv_does_not_import_any_records(self):
         app, client = self.make_client()

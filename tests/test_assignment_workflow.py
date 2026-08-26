@@ -54,6 +54,21 @@ class AssignmentWorkflowTests(unittest.TestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["resource_id"], "L40")
 
+    def test_recheck_persists_new_best_venue(self):
+        app = self.make_app()
+        store = app.extensions["campusflow_store"]
+        store.insert("events", {"event_id": "event-recheck", "status": "plan_ready", "proposed_plan": {"start_datetime": "2026-09-10T09:00:00", "end_datetime": "2026-09-10T11:00:00", "venues": [{"resource_id": "V100", "name": "Large Hall", "score": 50}]}})
+        store.insert("event_requirements", {"event_id": "event-recheck", "minimum_capacity": 50})
+        store.insert("venues", {"venue_id": "V50", "name": "Exact Hall", "capacity": 50, "status": "active"})
+        store.insert("venues", {"venue_id": "V100", "name": "Large Hall", "capacity": 100, "status": "active"})
+        with app.test_client() as client:
+            response = client.post("/api/events/event-recheck/recheck-resources/venues")
+        payload = response.get_json()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["updated"])
+        self.assertEqual(payload["matches"][0]["resource_id"], "V50")
+        self.assertEqual(store.get_one("events", {"event_id": "event-recheck"})["proposed_plan"]["venues"][0]["resource_id"], "V50")
+
     def test_delete_all_notifications(self):
         app = self.make_app()
         store = app.extensions["campusflow_store"]

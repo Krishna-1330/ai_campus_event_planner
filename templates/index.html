@@ -4,13 +4,46 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#09111f">
-  <title>CampusFlow AI · Campus Operations</title>
+  <title>AI Event Planner · Campus Operations</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/data-manager.css') }}">
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
-  <div class="app-shell" id="app-shell">
+  <section class="landing-page visible" id="landing-page">
+    <nav class="landing-nav" aria-label="Landing page navigation">
+      <a class="landing-brand" href="#landing-page"><span class="brand-mark">✦</span><span>AI Event <b>Planner</b></span></a>
+      <div class="landing-links"><a href="#how-it-works">How it works</a><a href="#made-for">Made for your campus</a><button class="landing-signin" data-action="landing-login">Sign in <span>↗</span></button></div>
+    </nav>
+    <div class="landing-hero">
+      <div class="landing-copy">
+        <div class="eyebrow"><span></span> Intelligent campus event operations</div>
+        <h1>AI EVENT<br><em>PLANNER</em></h1>
+        <h2>Plan Smarter. Coordinate Better.</h2>
+        <p>Turn your event requirements into an organized plan for venues, people, equipment, schedules and resources.</p>
+        <div class="landing-actions"><button class="primary" data-action="landing-login">Explore AI Event Planner <b>→</b></button><a class="landing-scroll" href="#event-story"><span>↓</span> Watch the plan come together</a></div>
+      </div>
+      <div class="planning-scene" aria-label="Animated team organizing an event" role="img">
+        <div class="scene-label"><span class="pulse"></span> EVENT PREPARATION <b>08:42</b></div>
+        <div class="scene-grid"></div><div class="scene-stage"><i></i><i></i><b>WELCOME</b></div><div class="scene-table"></div><div class="scene-board"><span>EVENT BRIEF</span><b>Campus Innovation Day</b><i></i><i></i><i></i></div>
+        <div class="scene-chair chair-one"></div><div class="scene-chair chair-two"></div><div class="scene-chair chair-three"></div><div class="scene-light light-one"></div><div class="scene-light light-two"></div>
+        <div class="scene-person person-one"><span class="head"></span><span class="body"></span><span class="arm"></span></div><div class="scene-person person-two"><span class="head"></span><span class="body"></span><span class="arm"></span></div><div class="scene-person person-three"><span class="head"></span><span class="body"></span><span class="arm"></span></div>
+        <div class="scene-note note-one">VENUE <b>✓</b></div><div class="scene-note note-two">CREW <b>✓</b></div><div class="scene-note note-three">RUN OF SHOW <b>→</b></div><div class="scene-progress"><span></span></div>
+        <div class="scene-cursor"></div>
+      </div>
+    </div>
+    <div class="landing-proof"><span>BUILT TO COORDINATE</span><b>People</b><b>Places</b><b>Equipment</b><b>Timelines</b><b>Approvals</b></div>
+    <section class="landing-section" id="event-story"><div class="section-kicker">01 / EVENT IDEA</div><h2>Every great event starts as a moving set of parts.</h2><p class="section-lead">A brief, a date, a room, a team. The planner turns that first idea into a visible operational path.</p><div class="story-track"><span>EVENT IDEA</span><i>↓</i><span>VENUE</span><i>↓</i><span>PEOPLE</span><i>↓</i><span>EQUIPMENT</span><i>↓</i><span>SCHEDULE</span><i>↓</i><b>COMPLETE EVENT PLAN</b></div></section>
+    <section class="landing-section landing-section-dark" id="how-it-works"><div class="section-kicker">02 / WHAT IT ORGANIZES</div><h2>One plan for the people and places behind the event.</h2><div class="organize-line"><span>VENUES</span><span>FACULTY</span><span>VOLUNTEERS</span><span>GUESTS</span><span>EQUIPMENT</span><span>LABS</span><span>SCHEDULES</span><span>TASKS</span></div></section>
+    <section class="landing-section" id="capabilities"><div class="section-kicker">03 / A BRIEF BECOMES A PLAN</div><div class="brief-demo"><div class="brief-input"><span>EVENT REQUEST</span><p>Organize a 2-day AI Hackathon for 120 participants with faculty, volunteers, labs and equipment.</p></div><div class="brief-arrow">→</div><div class="brief-output"><span>EVENT PLAN READY</span><b>Venue <i>✓</i></b><b>Faculty <i>✓</i></b><b>Volunteers <i>✓</i></b><b>Equipment <i>✓</i></b><b>Schedule <i>✓</i></b></div></div></section>
+    <section class="landing-section landing-section-split"><div><div class="section-kicker">04 / INTELLIGENT MATCHING</div><h2>Good choices fit together.</h2></div><p>Capacity, availability, software, workload and timing are checked together before a plan is ready for human approval.</p></section>
+    <section class="landing-section landing-section-dark change-story"><div class="section-kicker">05 / WHEN REALITY CHANGES</div><h2>Selected venue becomes unavailable.</h2><div class="change-flow"><span>CONFLICT DETECTED</span><i>→</i><span>ALTERNATIVE VENUE FOUND</span><i>→</i><b>NEW PLAN READY</b></div><div class="check-row"><span>✓ Capacity</span><span>✓ Availability</span><span>✓ Equipment</span><span>✓ Schedule</span></div></section>
+    <section class="landing-section landing-section-quote" id="made-for"><div class="section-kicker">06 / MADE FOR CAMPUS LIFE</div><blockquote>Plan the details. Leave room for the moment.</blockquote><span>Hackathons · Workshops · Seminars · Multi-day events</span></section>
+    <section class="landing-section landing-final"><div><div class="section-kicker">07 / READY TO ORGANIZE?</div><h2>Ready to organize your next event?</h2><p>AI-powered planning for smarter campus events.</p></div><button class="primary" data-action="landing-login">Create Your Event <b>→</b></button></section>
+    <section class="landing-section landing-end"><div class="section-kicker">08 / THANKS FOR VISITING</div><h2>Thanks for visiting AI Event Planner.</h2><p>Ready to plan your next event?</p><button class="secondary" data-action="landing-login">Login / Get Started <b>↗</b></button><a class="landing-scroll" href="#landing-page"><span>↑</span> Back to the beginning</a></section>
+    <footer class="landing-footer"><span>AI Event Planner</span><span>Plan clearly. Gather brilliantly.</span></footer>
+  </section>
+  <div class="app-shell" id="app-shell" hidden>
     <aside class="sidebar">
       <a class="brand" href="#home" data-view="home"><span class="brand-mark">✦</span><span>CampusFlow <b>AI</b></span></a>
       <div class="workspace"><span class="presence"></span> Campus Operations <small>LIVE</small></div>

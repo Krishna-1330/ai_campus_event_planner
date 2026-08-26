@@ -10,7 +10,7 @@ const compactTime = value => value ? new Date(value).toLocaleTimeString([], { ho
 async function api(path, options = {}) {
   const response = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
   const data = await response.json().catch(() => ({ ok: false, error: 'Unexpected server response.' }));
-  if (response.status === 401 && !path.startsWith('/api/auth/')) showLogin();
+  if (response.status === 401 && !path.startsWith('/api/auth/')) showLogin(true);
   if (!response.ok) throw new Error(data.error || 'Something went wrong.');
   return data;
 }
@@ -38,7 +38,7 @@ function navigate(view) {
 async function initialize() {
   try {
     const session = await api('/api/auth/me');
-    if (!session.authenticated) { showLogin(); return; }
+    if (!session.authenticated) { showLogin(false); return; }
     applySession(session.user);
     if (session.user.role !== 'admin') { await loadMemberMailbox(); navigate('member-dashboard'); return; }
     const dashboard = await api('/api/dashboard');
@@ -50,20 +50,25 @@ async function initialize() {
   navigate(['dashboard','create','schedule','resources','venues','data','campus','conflicts','agents','audit','event','member-dashboard','profile','attendance'].includes(destination) ? destination : 'dashboard');
 }
 
-function showLogin() {
+function showLogin(openLogin = false) {
   state.user = null;
   state.currentView = 'login';
+  $('#landing-page').classList.add('visible');
   $('#app-shell').classList.remove('authenticated');
-  $$('.view').forEach(el => el.classList.toggle('active', el.id === 'view-login'));
+  $('#app-shell').classList.toggle('login-open', openLogin);
+  $('#app-shell').hidden = !openLogin;
+  $$('.view').forEach(el => el.classList.toggle('active', openLogin && el.id === 'view-login'));
   $$('nav a').forEach(el => el.classList.remove('active'));
   $$('[data-admin-only],[data-member-only]').forEach(el => { el.hidden = true; });
   $('#profile-button').innerHTML = 'Sign in <span>Account</span>';
   $('#notification-panel').classList.remove('show');
   $('#mail-panel').classList.remove('show');
-  window.location.hash = 'login';
-  setLoginTab('staff');
-  setStaffRole('volunteer');
-  const form = $('#login-form'); if (form) form.reset();
+  if (openLogin) {
+    window.location.hash = 'login';
+    setLoginTab('staff');
+    setStaffRole('volunteer');
+    const form = $('#login-form'); if (form) form.reset();
+  }
 }
 
 function setLoginTab(tab) {
@@ -89,6 +94,9 @@ function setStaffRole(role) {
 function applySession(user) {
   state.user = user;
   const isAdmin = user.role === 'admin';
+  $('#landing-page').classList.remove('visible');
+  $('#app-shell').classList.remove('login-open');
+  $('#app-shell').hidden = false;
   $('#app-shell').classList.add('authenticated');
   $$('[data-admin-only]').forEach(el => { el.hidden = !isAdmin; });
   $$('[data-member-only]').forEach(el => { el.hidden = isAdmin; });
@@ -116,7 +124,7 @@ async function signIn(form) {
 }
 async function signOut() {
   try { await api('/api/auth/logout', { method: 'POST' }); } catch (_) { /* The local view is still safely cleared. */ }
-  showLogin();
+  showLogin(false);
 }
 
 function renderDashboard(data) {
@@ -191,10 +199,20 @@ async function loadEvent() {
 }
 function items(group) { return group?.length ? group.map(item => `<div class="resource-line"><b>${esc(item.name || item.resource_id)}</b><span>${item.score ? `${item.score}% match` : item.quantity > 1 ? `${item.quantity} units` : nice(item.assignment_type || item.resource_type)}</span></div>`).join('') : '<div class="resource-line"><span>Not required for this event</span></div>'; }
 async function recheckResources(resourceType) {
-  try { const result = await api(`/api/events/${state.eventId}/recheck-resources/${resourceType}`, { method: 'POST' }); toast(result.updated ? `${resourceType === 'labs' ? 'Labs' : 'Venues'} improved and updated.` : 'Current selection is already the best available fit.'); await loadEvent(); } catch (error) { toast(error.message, 'error'); }
+  try {
+    const label = resourceType === 'labs' ? 'lab' : 'venue';
+    const result = await api(`/api/events/${state.eventId}/recheck-resources/${resourceType}`, { method: 'POST' });
+    const message = !result.best_fit ? `No available ${label} fits this prompt and time slot.` : result.updated ? `Best-fit ${label} selected and saved.` : `Current ${label} is already the best available fit.`;
+    toast(result.validation?.valid ? message : `${message} Review the validation checks.`, result.validation?.valid ? '' : 'error');
+    await loadEvent();
+  } catch (error) { toast(error.message, 'error'); }
 }
 async function replanTimeline() {
-  try { const result = await api(`/api/events/${state.eventId}/replan-timeline`, { method: 'POST' }); toast(result.updated ? `Timeline replanned (${result.count}).` : `Current timeline is already better (${result.count}).`); await loadEvent(); } catch (error) { toast(error.message, 'error'); }
+  try {
+    const result = await api(`/api/events/${state.eventId}/replan-timeline`, { method: 'POST' });
+    toast(result.updated ? `Best event timeline selected and saved (${result.count}).` : `Current timeline is already the most complete option (${result.count}).`);
+    await loadEvent();
+  } catch (error) { toast(error.message, 'error'); }
 }
 function renderEvent(event) {
   const plan = event.active_plan || event.proposed_plan;
@@ -203,7 +221,7 @@ function renderEvent(event) {
   const requirements = event.prompt || '';
   const isPending = event.status === 'plan_ready'; const isReplan = event.status === 'replan_pending'; const isConflict = event.status === 'conflict';
   const canComplete = event.status === 'approved' && new Date(plan.end_datetime) < new Date();
-  $('#event-command').innerHTML = `<div class="command-header"><div><div class="eyebrow"><span></span> Event command center</div><h2>${esc(event.title)}</h2><p>${compactDate(plan.start_datetime)} · ${compactTime(plan.start_datetime)}–${compactTime(plan.end_datetime)} · <span class="status ${event.status}">${nice(event.status)}</span></p></div><div class="command-actions"><div class="readiness-card"><strong>${event.readiness || 0}%</strong><span>READINESS</span></div>${isPending ? `<button class="primary" data-action="approve-plan">Approve & lock <b>✓</b></button>` : ''}${isConflict ? `<button class="secondary" data-go="create">Revise & replan</button>` : ''}${event.status === 'approved' ? `<button class="secondary" data-action="simulate">Report resource conflict</button>` : ''}${canComplete ? `<button class="primary" data-action="complete-event">Mark completed</button>` : ''}${isReplan ? `<button class="primary" data-action="approve-replan">Approve new plan <b>✓</b></button><button class="secondary" data-action="reject-replan">Reject</button>` : ''}</div></div>
+  $('#event-command').innerHTML = `<div class="command-header"><div><div class="eyebrow"><span></span> Event command center</div><h2>${esc(event.title)}</h2><p>${compactDate(plan.start_datetime)} · ${compactTime(plan.start_datetime)}–${compactTime(plan.end_datetime)} · <span class="status ${event.status}">${nice(event.status)}</span></p></div><div class="command-actions"><div class="readiness-card" title="Readiness measures six checks: space, faculty, volunteers, equipment, validation, and approval."><strong>${event.readiness || 0}%</strong><span>READINESS</span></div>${isPending ? `<button class="primary" data-action="approve-plan">Approve & lock <b>✓</b></button>` : ''}${isConflict ? `<button class="secondary" data-go="create">Revise & replan</button>` : ''}${event.status === 'approved' ? `<button class="secondary" data-action="simulate">Report resource conflict</button>` : ''}${canComplete ? `<button class="primary" data-action="complete-event">Mark completed</button>` : ''}${isReplan ? `<button class="primary" data-action="approve-replan">Approve new plan <b>✓</b></button><button class="secondary" data-action="reject-replan">Reject</button>` : ''}</div></div>
     <div class="command-grid"><div><article class="panel overview-card"><span class="label">AI COORDINATOR BRIEF</span><h3>Operational recommendation</h3><p>${esc(event.ai_explanation || 'This plan was evaluated with deterministic availability, capacity and workload checks.')}</p><div class="tag-row">${locations.map(x => `<span class="tag">${esc(x.name)}</span>`).join('')}${(plan.equipment || []).map(x => `<span class="tag">${esc(x.name)} ×${x.quantity}</span>`).join('')}</div></article><div class="detail-grid"><article class="panel"><div class="panel-title"><div><span class="label">RUN OF SHOW</span><h3>Event timeline</h3></div><button class="secondary" data-action="replan-timeline">Replan timeline (${event.timeline_replan_count || 0})</button></div><div class="timeline">${(plan.timeline || []).map(t => `<div class="timeline-row"><time>${esc(t.time)}</time><div><b>${esc(t.title)}</b><span>${esc(t.description || t.owner)}</span>${t.description ? `<small>${esc(t.owner)}</small>` : ''}</div></div>`).join('')}</div></article><article class="panel"><span class="label">EXECUTION TASKS</span><h3>Readiness checklist</h3>${event.tasks?.map(task => `<div class="task">${esc(task.title)}<span>${esc(task.priority)}</span></div>`).join('') || empty('Tasks are being created', '')}</article></div></div><div><article class="panel"><div class="panel-title"><div><span class="label">LOCKABLE RESOURCES</span><h3>Space & systems</h3></div><div class="assignment-actions"><button class="secondary" data-action="recheck-labs">Recheck labs (${(event.resource_recheck_counts || {}).labs || 0})</button><button class="secondary" data-action="recheck-venues">Recheck venues (${(event.resource_recheck_counts || {}).venues || 0})</button></div></div>${items(locations)}</article><article class="panel" style="margin-top:16px"><span class="label">PEOPLE MATCHING</span><h3>Faculty</h3>${items(plan.faculty)}<h3 style="margin-top:16px">Volunteer crew</h3>${items(plan.volunteers)}<h3 style="margin-top:16px">Guest speaker</h3>${items(plan.guests)}${renderAssignmentAlternatives(event)}</article></div></div>${isReplan ? renderReplan(event.pending_replan) : ''}`;
 }
 function renderAssignmentAlternatives(event) {
@@ -555,6 +573,7 @@ document.addEventListener('click', event => {
   const staffRole = event.target.closest('[data-staff-role]'); if (staffRole) { setStaffRole(staffRole.dataset.staffRole); return; }
   const nav = event.target.closest('[data-view]'); if (nav) { event.preventDefault(); if (nav.dataset.view === 'data') { state.dataContext = 'resources'; state.dataEdit = null; } navigate(nav.dataset.view); return; }
   const go = event.target.closest('[data-go]'); if (go) { navigate(go.dataset.go); return; }
+  const landingLogin = event.target.closest('[data-action="landing-login"]'); if (landingLogin) { showLogin(true); $('#login-form [name="username"]').focus(); return; }
   const hint = event.target.closest('[data-prompt]'); if (hint) { $('#event-prompt').value = hint.dataset.prompt; return; }
   const open = event.target.closest('.event-open'); if (open) { state.eventId = open.dataset.id; navigate('event'); return; }
   const resource = event.target.closest('[data-resource-type]'); if (resource) { state.resourcesType = resource.dataset.resourceType; loadResources().catch(e => toast(e.message, 'error')); return; }
@@ -610,4 +629,13 @@ document.addEventListener('submit', event => {
 $('#generate-plan').addEventListener('click', generatePlan);
 $('#notification-button').addEventListener('click', () => $('#notification-panel').classList.toggle('show'));
 $('#mail-button').addEventListener('click', () => $('#mail-panel').classList.toggle('show'));
+function setupLandingScroll() {
+  const sections = $$('.landing-page .landing-section');
+  if (!('IntersectionObserver' in window)) { sections.forEach(section => section.classList.add('is-visible')); return; }
+  const observer = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); }
+  }), { threshold: 0.18 });
+  sections.forEach(section => observer.observe(section));
+}
+setupLandingScroll();
 initialize();

@@ -22,7 +22,7 @@ def create_app():
     app.extensions["campusflow_store"] = make_store(
         app.config["MONGO_URI"], app.config["LOCAL_MONGO_URI"], app.config["MONGO_DB_NAME"]
     )
-    bootstrap_users(app.extensions["campusflow_store"], app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"], app.config["DEFAULT_MEMBER_PASSWORD"])
+    bootstrap_users(app.extensions["campusflow_store"], app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"])
     app.register_blueprint(auth_bp); app.register_blueprint(events_bp); app.register_blueprint(dashboard_bp); app.register_blueprint(resources_bp); app.register_blueprint(campus_bp); app.register_blueprint(operations_bp)
 
     @app.before_request
@@ -64,7 +64,7 @@ def create_app():
         data_store = app.extensions["campusflow_store"]
         for collection in CAMPUS_COLLECTIONS:
             data_store.delete_many(collection, {})
-        bootstrap_users(data_store, app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"], app.config["DEFAULT_MEMBER_PASSWORD"])
+        bootstrap_users(data_store, app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"])
         click.echo("CampusFlow is empty and ready for your campus data.")
     return app
 

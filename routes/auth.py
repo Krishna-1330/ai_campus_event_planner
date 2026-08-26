@@ -49,22 +49,21 @@ def admin_required(view):
     return wrapped
 
 
-def bootstrap_users(data_store, admin_username: str, admin_password: str, default_password: str):
+def bootstrap_users(data_store, admin_username: str, admin_password: str):
     """Create local accounts once; existing account passwords are never replaced."""
     _create_user_if_missing(data_store, admin_username, admin_password, "admin", "Campus Administrator")
     for role, (collection, id_key) in ROLE_COLLECTIONS.items():
         for record in data_store.get_all(collection):
-            ensure_resource_account(data_store, role, record, default_password)
+            ensure_resource_account(data_store, role, record)
 
 
-def ensure_resource_account(data_store, role: str, record: dict, default_password: str | None = None):
+def ensure_resource_account(data_store, role: str, record: dict):
     """Give each faculty member and volunteer an account matched to their resource ID."""
     collection, id_key = ROLE_COLLECTIONS[role]
     resource_id = record.get(id_key)
     if not resource_id:
         return
-    password = default_password or current_app.config["DEFAULT_MEMBER_PASSWORD"]
-    _create_user_if_missing(data_store, resource_id, password, role, record.get("name", resource_id), resource_id)
+    _create_user_if_missing(data_store, resource_id, resource_id, role, record.get("name", resource_id), resource_id)
 
 
 def _create_user_if_missing(data_store, username, password, role, display_name, resource_id=None):
