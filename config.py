@@ -14,6 +14,7 @@ class Config:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+    ORGANIZER_ACCOUNTS = os.getenv("ORGANIZER_ACCOUNTS", "")
     JSON_SORT_KEYS = False
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024
     SESSION_COOKIE_HTTPONLY = True

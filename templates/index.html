@@ -48,8 +48,8 @@
       <a class="brand" href="#home" data-view="home"><span class="brand-mark">✦</span><span>CampusFlow <b>AI</b></span></a>
       <div class="workspace"><span class="presence"></span> Campus Operations <small>LIVE</small></div>
       <nav aria-label="Primary navigation">
-        <a href="#dashboard" data-view="dashboard" data-admin-only><i>▦</i> Dashboard</a>
-        <a href="#create" data-view="create" data-admin-only><i>＋</i> Create event</a>
+        <a href="#dashboard" data-view="dashboard" data-event-manager-only><i>▦</i> Dashboard</a>
+        <a href="#create" data-view="create" data-event-manager-only><i>＋</i> Create event</a>
         <a href="#agents" data-view="agents" data-admin-only><i>✦</i> AI agents</a>
         <a href="#resources" data-view="resources" data-admin-only><i>◌</i> Resources</a>
         <a href="#data" data-view="data" data-admin-only><i>DB</i> Data manager</a>
@@ -57,6 +57,7 @@
         <a href="#member-dashboard" data-view="member-dashboard" data-member-only><i>▦</i> Dashboard</a>
         <a href="#profile" data-view="profile" data-member-only><i>◉</i> My profile</a>
         <a href="#attendance" data-view="attendance" data-member-only><i>✓</i> Attendance</a>
+        <a href="#profile" data-view="profile" data-organizer-only><i>◉</i> My profile</a>
       </nav>
       <div class="side-bottom"><span class="dot"></span><span id="storage-mode">Connecting system...</span></div>
     </aside>
@@ -78,6 +79,7 @@
             <div id="staff-role-toggle" class="role-toggle">
               <button type="button" class="role-option active" data-staff-role="volunteer">Volunteer</button>
               <button type="button" class="role-option" data-staff-role="faculty">Faculty</button>
+              <button type="button" class="role-option" data-staff-role="organizer">Organizer</button>
             </div>
             <label id="username-label">Volunteer ID<input name="username" autocomplete="username" placeholder="Enter your volunteer ID" required></label>
             <label>Password<input type="password" name="password" autocomplete="current-password" required></label>

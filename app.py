@@ -22,7 +22,7 @@ def create_app():
     app.extensions["campusflow_store"] = make_store(
         app.config["MONGO_URI"], app.config["LOCAL_MONGO_URI"], app.config["MONGO_DB_NAME"]
     )
-    bootstrap_users(app.extensions["campusflow_store"], app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"])
+    bootstrap_users(app.extensions["campusflow_store"], app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"], app.config["ORGANIZER_ACCOUNTS"])
     app.register_blueprint(auth_bp); app.register_blueprint(events_bp); app.register_blueprint(dashboard_bp); app.register_blueprint(resources_bp); app.register_blueprint(campus_bp); app.register_blueprint(operations_bp)
 
     @app.before_request
@@ -41,8 +41,15 @@ def create_app():
         # own event feed, and responding to their own assignments; every other API
         # endpoint (campus data, resource management, agents, audit, etc.) is admin-only.
         member_safe_endpoints = {"auth.my_availability", "auth.my_events", "auth.respond_assignment", "auth.my_profile", "auth.update_my_profile", "auth.my_mailbox"}
-        if user.get("role") != "admin" and request.endpoint not in member_safe_endpoints:
+        organizer_safe_prefixes = {"events."}
+        if user.get("role") not in {"admin", "organizer"} and request.endpoint not in member_safe_endpoints:
             return api_error("Your account can only view its own availability and assignments.", 403)
+        if user.get("role") == "organizer" and not (request.endpoint in {"auth.my_profile", "auth.update_my_profile", "dashboard.dashboard"} or any(request.endpoint.startswith(prefix) for prefix in organizer_safe_prefixes)):
+            return api_error("Organizers can manage events, but resource management is restricted to administrators.", 403)
+        if user.get("role") == "organizer" and request.endpoint.startswith("events.") and request.view_args and request.view_args.get("event_id"):
+            event = app.extensions["campusflow_store"].get_one("events", {"event_id": request.view_args["event_id"]})
+            if not event or event.get("organizer_username") != user.get("username"):
+                return api_error("This event belongs to another organizer.", 403)
         return None
 
     @app.errorhandler(413)
@@ -64,7 +71,7 @@ def create_app():
         data_store = app.extensions["campusflow_store"]
         for collection in CAMPUS_COLLECTIONS:
             data_store.delete_many(collection, {})
-        bootstrap_users(data_store, app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"])
+        bootstrap_users(data_store, app.config["ADMIN_USERNAME"], app.config["ADMIN_PASSWORD"], app.config["ORGANIZER_ACCOUNTS"])
         click.echo("CampusFlow is empty and ready for your campus data.")
     return app
 

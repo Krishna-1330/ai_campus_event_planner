@@ -23,9 +23,11 @@ function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function navigate(view) {
   if (!state.user && view !== 'login') { showLogin(); return; }
   const memberViews = new Set(['member-dashboard', 'profile', 'attendance']);
+  const organizerViews = new Set(['dashboard', 'create', 'planning', 'event', 'profile']);
   const adminViews = new Set(['dashboard', 'create', 'planning', 'event', 'resources', 'venues', 'data', 'schedule', 'campus', 'conflicts', 'agents', 'audit']);
   if (state.user?.role === 'admin' && memberViews.has(view)) view = 'dashboard';
-  if (state.user && state.user.role !== 'admin' && !memberViews.has(view)) view = 'member-dashboard';
+  if (state.user?.role === 'organizer' && !organizerViews.has(view)) view = 'dashboard';
+  if (state.user && !['admin', 'organizer'].includes(state.user.role) && !memberViews.has(view)) view = 'member-dashboard';
   if (state.user?.role === 'admin' && !adminViews.has(view)) view = 'dashboard';
   state.currentView = view;
   $$('.view').forEach(el => el.classList.toggle('active', el.id === `view-${view}`));
@@ -40,6 +42,7 @@ async function initialize() {
     const session = await api('/api/auth/me');
     if (!session.authenticated) { showLogin(false); return; }
     applySession(session.user);
+    if (session.user.role === 'organizer') { navigate('dashboard'); return; }
     if (session.user.role !== 'admin') { await loadMemberMailbox(); navigate('member-dashboard'); return; }
     const dashboard = await api('/api/dashboard');
     $('#storage-mode').textContent = ({ memory: 'Temporary memory - not saved', local: 'Local MongoDB - connected', atlas: 'MongoDB Atlas - connected' }[dashboard.mode] || 'Connecting system...');
@@ -59,7 +62,7 @@ function showLogin(openLogin = false) {
   $('#app-shell').hidden = !openLogin;
   $$('.view').forEach(el => el.classList.toggle('active', openLogin && el.id === 'view-login'));
   $$('nav a').forEach(el => el.classList.remove('active'));
-  $$('[data-admin-only],[data-member-only]').forEach(el => { el.hidden = true; });
+  $$('[data-admin-only],[data-member-only],[data-event-manager-only],[data-organizer-only]').forEach(el => { el.hidden = true; });
   $('#profile-button').innerHTML = 'Sign in <span>Account</span>';
   $('#notification-panel').classList.remove('show');
   $('#mail-panel').classList.remove('show');
@@ -86,20 +89,23 @@ function setLoginTab(tab) {
 function setStaffRole(role) {
   state.staffRole = role;
   $$('[data-staff-role]').forEach(el => el.classList.toggle('active', el.dataset.staffRole === role));
-  const label = role === 'faculty' ? 'Faculty' : 'Volunteer';
+  const label = role === 'faculty' ? 'Faculty' : role === 'organizer' ? 'Organizer' : 'Volunteer';
   $('#username-label').firstChild.textContent = `${label} ID`;
-  $('#login-form [name="username"]').placeholder = role === 'faculty' ? 'Enter your faculty ID' : 'Enter your volunteer ID';
+  $('#login-form [name="username"]').placeholder = role === 'faculty' ? 'Enter your faculty ID' : role === 'organizer' ? 'Enter your organizer ID' : 'Enter your volunteer ID';
   $('#login-note').textContent = `Use the ${label} ID and password supplied by your CampusFlow administrator.`;
 }
 function applySession(user) {
   state.user = user;
   const isAdmin = user.role === 'admin';
+  const isOrganizer = user.role === 'organizer';
   $('#landing-page').classList.remove('visible');
   $('#app-shell').classList.remove('login-open');
   $('#app-shell').hidden = false;
   $('#app-shell').classList.add('authenticated');
   $$('[data-admin-only]').forEach(el => { el.hidden = !isAdmin; });
-  $$('[data-member-only]').forEach(el => { el.hidden = isAdmin; });
+  $$('[data-event-manager-only]').forEach(el => { el.hidden = !(isAdmin || isOrganizer); });
+  $$('[data-member-only]').forEach(el => { el.hidden = isAdmin || isOrganizer; });
+  $$('[data-organizer-only]').forEach(el => { el.hidden = !isOrganizer; });
   $('#profile-button').innerHTML = `${esc(user.display_name)} <span>${nice(user.role)}</span>`;
 }
 async function signIn(form) {
@@ -118,7 +124,7 @@ async function signIn(form) {
     toast(`Signed in as ${nice(result.user.role)}.`);
     if (result.user.role === 'admin') loadNotifications().catch(error => toast(error.message, 'error'));
     else loadMemberMailbox().catch(error => toast(error.message, 'error'));
-    navigate(result.user.role === 'admin' ? 'dashboard' : 'member-dashboard');
+    navigate(['admin', 'organizer'].includes(result.user.role) ? 'dashboard' : 'member-dashboard');
   } catch (error) { toast(error.message, 'error'); }
   finally { button.disabled = false; }
 }
@@ -133,7 +139,7 @@ function renderDashboard(data) {
     ['Resource utilization', `${data.metrics.resource_utilization}%`, 'Lock-aware capacity', 'purple'], ['Conflicts', data.metrics.conflicts, 'Needs attention', 'red'], ['Event readiness', `${data.metrics.readiness}%`, 'Average confidence', 'orange']
   ];
   $('#metric-grid').innerHTML = metrics.map(([label, value, note, color]) => `<article class="metric metric-${color}"><span class="label">${label}</span><strong>${value}</strong><small>${note}</small></article>`).join('');
-  $('#active-events').innerHTML = data.events.length ? data.events.map(event => `<div class="event-row"><span class="event-icon">✦</span><span class="event-info"><b>${esc(event.title)}</b><span>${compactDate(event.start_datetime)} · ${compactTime(event.start_datetime)}</span></span><span class="status ${event.status}">${nice(event.status)}</span><span class="event-row-actions"><button class="text-button event-open" data-id="${event.event_id}">Open</button><button class="text-button" data-action="edit-event" data-event-id="${event.event_id}">Edit</button></span></div>`).join('') : empty('No events yet', 'Use Create event to add your first event.');
+  $('#active-events').innerHTML = data.events.length ? data.events.map(event => `<div class="event-row"><span class="event-icon">✦</span><span class="event-info"><b>${esc(event.title)}</b><span>${compactDate(event.start_datetime)} · ${compactTime(event.start_datetime)}${state.user?.role === 'admin' && event.organizer_name ? ` · ${esc(event.organizer_name)}` : ''}</span></span><span class="status ${event.status}">${nice(event.status)}</span><span class="event-row-actions"><button class="text-button event-open" data-id="${event.event_id}">Open</button><button class="text-button" data-action="edit-event" data-event-id="${event.event_id}">Edit</button></span></div>`).join('') : empty('No events yet', state.user?.role === 'organizer' ? 'Create your first organizer event.' : 'Use Create event to add your first event.');
   $('#activity-list').innerHTML = data.activity.length ? [...data.activity].reverse().map(row => `<div class="activity-item"><i>✦</i><div><b>${esc(row.action)}</b><span>${esc(row.details)}</span></div><time>${compactDate(row.timestamp)}</time></div>`).join('') : empty('No operational activity yet', 'Actions will appear here as plans are generated.');
 }
 async function loadDashboard() { renderDashboard(await api('/api/dashboard')); }
@@ -221,7 +227,7 @@ function renderEvent(event) {
   const requirements = event.prompt || '';
   const isPending = event.status === 'plan_ready'; const isReplan = event.status === 'replan_pending'; const isConflict = event.status === 'conflict';
   const canComplete = event.status === 'approved' && new Date(plan.end_datetime) < new Date();
-  $('#event-command').innerHTML = `<div class="command-header"><div><div class="eyebrow"><span></span> Event command center</div><h2>${esc(event.title)}</h2><p>${compactDate(plan.start_datetime)} · ${compactTime(plan.start_datetime)}–${compactTime(plan.end_datetime)} · <span class="status ${event.status}">${nice(event.status)}</span></p></div><div class="command-actions"><div class="readiness-card" title="Readiness measures six checks: space, faculty, volunteers, equipment, validation, and approval."><strong>${event.readiness || 0}%</strong><span>READINESS</span></div>${isPending ? `<button class="primary" data-action="approve-plan">Approve & lock <b>✓</b></button>` : ''}${isConflict ? `<button class="secondary" data-go="create">Revise & replan</button>` : ''}${event.status === 'approved' ? `<button class="secondary" data-action="simulate">Report resource conflict</button>` : ''}${canComplete ? `<button class="primary" data-action="complete-event">Mark completed</button>` : ''}${isReplan ? `<button class="primary" data-action="approve-replan">Approve new plan <b>✓</b></button><button class="secondary" data-action="reject-replan">Reject</button>` : ''}</div></div>
+  $('#event-command').innerHTML = `<div class="command-header"><div><div class="eyebrow"><span></span> Event command center</div><h2>${esc(event.title)}</h2><p>${compactDate(plan.start_datetime)} · ${compactTime(plan.start_datetime)}–${compactTime(plan.end_datetime)} · <span class="status ${event.status}">${nice(event.status)}</span></p></div><div class="command-actions"><div class="readiness-card" title="Readiness measures six checks: space, faculty, volunteers, equipment, validation, and approval."><strong>${event.readiness || 0}%</strong><span>READINESS</span></div>${isPending ? `<button class="primary" data-action="approve-plan">Approve & lock <b>✓</b></button>` : ''}${isConflict ? `<button class="secondary" data-go="create">Revise & replan</button>` : ''}${event.status === 'approved' ? `<button class="secondary" data-action="simulate">Report resource conflict</button>` : ''}${canComplete ? `<button class="primary" data-action="complete-event">Mark completed</button>` : ''}${isReplan ? `<button class="primary" data-action="approve-replan">Approve new plan <b>✓</b></button><button class="secondary" data-action="reject-replan">Reject</button>` : ''}<button class="secondary" data-action="delete-event">Delete event</button></div></div>
     <div class="command-grid"><div><article class="panel overview-card"><span class="label">AI COORDINATOR BRIEF</span><h3>Operational recommendation</h3><p>${esc(event.ai_explanation || 'This plan was evaluated with deterministic availability, capacity and workload checks.')}</p><div class="tag-row">${locations.map(x => `<span class="tag">${esc(x.name)}</span>`).join('')}${(plan.equipment || []).map(x => `<span class="tag">${esc(x.name)} ×${x.quantity}</span>`).join('')}</div></article><div class="detail-grid"><article class="panel"><div class="panel-title"><div><span class="label">RUN OF SHOW</span><h3>Event timeline</h3></div><button class="secondary" data-action="replan-timeline">Replan timeline (${event.timeline_replan_count || 0})</button></div><div class="timeline">${(plan.timeline || []).map(t => `<div class="timeline-row"><time>${esc(t.time)}</time><div><b>${esc(t.title)}</b><span>${esc(t.description || t.owner)}</span>${t.description ? `<small>${esc(t.owner)}</small>` : ''}</div></div>`).join('')}</div></article><article class="panel"><span class="label">EXECUTION TASKS</span><h3>Readiness checklist</h3>${event.tasks?.map(task => `<div class="task">${esc(task.title)}<span>${esc(task.priority)}</span></div>`).join('') || empty('Tasks are being created', '')}</article></div></div><div><article class="panel"><div class="panel-title"><div><span class="label">LOCKABLE RESOURCES</span><h3>Space & systems</h3></div><div class="assignment-actions"><button class="secondary" data-action="recheck-labs">Recheck labs (${(event.resource_recheck_counts || {}).labs || 0})</button><button class="secondary" data-action="recheck-venues">Recheck venues (${(event.resource_recheck_counts || {}).venues || 0})</button></div></div>${items(locations)}</article><article class="panel" style="margin-top:16px"><span class="label">PEOPLE MATCHING</span><h3>Faculty</h3>${items(plan.faculty)}<h3 style="margin-top:16px">Volunteer crew</h3>${items(plan.volunteers)}<h3 style="margin-top:16px">Guest speaker</h3>${items(plan.guests)}${renderAssignmentAlternatives(event)}</article></div></div>${isReplan ? renderReplan(event.pending_replan) : ''}`;
 }
 function renderAssignmentAlternatives(event) {
@@ -255,6 +261,10 @@ async function simulateConflict() {
 }
 async function approveReplan() { try { await api(`/api/events/${state.eventId}/approve-replan`, { method: 'POST' }); toast('New plan approved; old locks released and replacements locked.'); await loadEvent(); } catch (error) { toast(error.message, 'error'); } }
 async function rejectReplan() { try { await api(`/api/events/${state.eventId}/reject-replan`, { method: 'POST' }); toast('Replan rejected. The event remains in the conflict queue.'); await loadEvent(); } catch (error) { toast(error.message, 'error'); } }
+async function deleteEvent() {
+  if (!confirm('Delete this event and all related assignments, tasks, requirements and notifications?')) return;
+  try { await api(`/api/events/${state.eventId}`, { method: 'DELETE' }); toast('Event and related records deleted. Assigned people are available again.'); state.eventId = null; navigate('dashboard'); } catch (error) { toast(error.message, 'error'); }
+}
 
 async function loadSchedule() {
   const data = await api('/api/schedule');
@@ -265,7 +275,7 @@ async function loadSchedule() {
   $('#schedule-board').innerHTML = `<div class="schedule-head"><span>OPERATIONS TRACK</span>${datesHtml}</div>${['Event schedule', 'Locked assignments'].map((row, idx) => `<div class="schedule-line"><span>${row}</span><div class="time-grid">${Array.from({ length: 8 }, () => '<i></i>').join('')}${events.map((event, eventIndex) => { const dayIndex = dates.indexOf(event.start_datetime.slice(0, 10)); if (dayIndex < 0 || (idx && event.status === 'draft')) return ''; return `<span class="schedule-event ${event.status === 'replan_pending' || event.status === 'conflict' ? 'conflict' : 'approved'}" style="left:calc(${dayIndex} * 12.5% + 3px);width:calc(12.5% - 6px);top:${12 + (eventIndex % 2) * 25}px">${esc(event.title)}</span>`; }).join('')}</div></div>`).join('')}`;
 }
 
-const resourceLabels = { faculty: 'Faculty', volunteers: 'Volunteers', guests: 'Guests', labs: 'Labs', equipment: 'Equipment', vehicles: 'Vehicles' };
+const resourceLabels = { faculty: 'Faculty', volunteers: 'Volunteers', organizers: 'Organizers', guests: 'Guests', labs: 'Labs', equipment: 'Equipment', vehicles: 'Vehicles' };
 function resourceCard(row, resourceType) {
   const title = resourceType === 'labs' ? row.lab_name || row.name || row.block_name || row.type || row.vehicle_id : row.name || row.block_name || row.lab_name || row.type || row.vehicle_id;
   const subtitle = resourceType === 'blocks' ? row.location || row.description || `Block ${row.block_id}` : row.block_name || row.block || row.block_id || row.department || row.organization || row.location || row.driver || row.type || 'Campus resource';
@@ -303,6 +313,7 @@ async function loadVenues() {
 const dataTypes = {
   faculty: { label: 'Faculty', id: 'faculty_id', required: ['name', 'department'], fields: ['faculty_id', 'name', 'department', 'subjects', 'expertise', 'skills', 'contact', 'email', 'image', 'max_events_per_day', 'status'] },
   volunteers: { label: 'Volunteers', id: 'volunteer_id', required: ['name', 'department'], fields: ['volunteer_id', 'name', 'department', 'year', 'skills', 'interests', 'preferred_roles', 'email', 'image', 'max_events_per_day', 'status'] },
+  organizers: { label: 'Organizers', id: 'organizer_id', required: ['name', 'department'], fields: ['organizer_id', 'name', 'department', 'organization', 'phone', 'email', 'image', 'status'] },
   guests: { label: 'Guests', id: 'guest_id', required: ['name', 'organization'], fields: ['guest_id', 'name', 'designation', 'organization', 'expertise', 'relevant_departments', 'relevant_subjects', 'suitable_event_types', 'contact', 'email', 'image', 'previous_events', 'status'] },
   blocks: { label: 'Blocks', id: 'block_id', required: ['block_name'], fields: ['block_id', 'block_name', 'image', 'location', 'number_of_labs', 'description'] },
   labs: { label: 'Labs', id: 'lab_id', required: ['lab_name', 'block_id', 'capacity', 'number_of_systems'], fields: ['lab_id', 'lab_name', 'block_id', 'floor', 'capacity', 'number_of_systems', 'operating_system', 'installed_software', 'projectors', 'microphones', 'internet', 'image', 'status'] },
@@ -460,6 +471,7 @@ async function loadMemberDashboard() {
 const memberProfileFields = {
   faculty: ['name', 'department', 'subjects', 'expertise', 'skills', 'contact', 'email', 'image'],
   volunteer: ['name', 'department', 'year', 'skills', 'interests', 'preferred_roles', 'email', 'image'],
+  organizer: ['name', 'department', 'organization', 'phone', 'email', 'image'],
 };
 function profileFieldControl(field, profile) {
   const source = profile[field];
@@ -472,7 +484,8 @@ async function loadMemberProfile() {
   const data = await api('/api/auth/my-profile');
   const profile = data.profile;
   const fields = memberProfileFields[state.user.role] || [];
-  $('#member-profile').innerHTML = `<div class="page-heading"><div><div class="eyebrow"><span></span> ${esc(nice(state.user.role))} record</div><h2>My profile</h2><p>Keep your details, skills and contact information current so the AI can match you to suitable events.</p></div></div><div class="profile-layout"><article class="panel identity-card">${profile.image ? `<img class="profile-image" src="${esc(profile.image)}" alt="${esc(profile.name)}">` : `<div class="profile-avatar">${esc(profile.name).slice(0, 2).toUpperCase()}</div>`}<span class="label">${esc(nice(state.user.role))} ID · ${esc(profile[state.user.role === 'faculty' ? 'faculty_id' : 'volunteer_id'] || '')}</span><h3>${esc(profile.name)}</h3><p>${esc(profile.department || '')}${profile.year ? ` · Year ${esc(profile.year)}` : ''}</p><div class="availability-state"><b>${esc(nice(profile.status || 'active'))} account</b><span>${profile.max_events_per_day ? `Maximum ${esc(profile.max_events_per_day)} event${profile.max_events_per_day === 1 ? '' : 's'} per day · ` : ''}Your changes update only your own matching profile.</span></div></article><article class="panel"><div class="panel-title"><div><span class="label">EDIT DETAILS</span><h3>Profile information</h3></div></div><form id="profile-form" class="entry-form">${fields.map(field => profileFieldControl(field, profile)).join('')}<div class="form-actions"><button class="primary" type="submit">Save profile</button></div></form></article></div>`;
+  const profileId = profile[state.user.role === 'faculty' ? 'faculty_id' : state.user.role === 'volunteer' ? 'volunteer_id' : 'organizer_id'] || '';
+  $('#member-profile').innerHTML = `<div class="page-heading"><div><div class="eyebrow"><span></span> ${esc(nice(state.user.role))} record</div><h2>My profile</h2><p>Keep your details current so your organizer identity is visible on planned events.</p></div></div><div class="profile-layout"><article class="panel identity-card">${profile.image ? `<img class="profile-image" src="${esc(profile.image)}" alt="${esc(profile.name)}">` : `<div class="profile-avatar">${esc(profile.name).slice(0, 2).toUpperCase()}</div>`}<span class="label">${esc(nice(state.user.role))} ID · ${esc(profileId)}</span><h3>${esc(profile.name)}</h3><p>${esc(profile.department || '')}${profile.organization ? ` · ${esc(profile.organization)}` : ''}</p><div class="availability-state"><b>${esc(nice(profile.status || 'active'))} account</b><span>Your changes update only your own profile.</span></div></article><article class="panel"><div class="panel-title"><div><span class="label">EDIT DETAILS</span><h3>Profile information</h3></div></div><form id="profile-form" class="entry-form">${fields.map(field => profileFieldControl(field, profile)).join('')}<div class="form-actions"><button class="primary" type="submit">Save profile</button></div></form></article></div>`;
 }
 async function saveMemberProfile(form) {
   const button = form.querySelector('[type="submit"]'); button.disabled = true;
@@ -596,6 +609,7 @@ document.addEventListener('click', event => {
   if (action.dataset.action === 'simulate') simulateConflict();
   if (action.dataset.action === 'approve-replan') approveReplan();
   if (action.dataset.action === 'reject-replan') rejectReplan();
+  if (action.dataset.action === 'delete-event') deleteEvent();
   if (action.dataset.action === 'recheck-labs') recheckResources('labs');
   if (action.dataset.action === 'recheck-venues') recheckResources('venues');
   if (action.dataset.action === 'replan-timeline') replanTimeline();

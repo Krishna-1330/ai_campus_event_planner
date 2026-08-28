@@ -18,13 +18,14 @@ from services.gemini_service import extract_calendar_from_image
 
 bp = Blueprint("resources", __name__, url_prefix="/api")
 
-SOURCES = {"faculty": ("faculty", "faculty_id"), "volunteers": ("volunteers", "volunteer_id"), "guests": ("guests", "guest_id"), "blocks": ("blocks", "block_id"), "venues": ("venues", "venue_id"), "labs": ("labs", "lab_id"), "equipment": ("equipment", "equipment_id"), "vehicles": ("vehicles", "vehicle_id")}
+SOURCES = {"faculty": ("faculty", "faculty_id"), "volunteers": ("volunteers", "volunteer_id"), "organizers": ("organizers", "organizer_id"), "guests": ("guests", "guest_id"), "blocks": ("blocks", "block_id"), "venues": ("venues", "venue_id"), "labs": ("labs", "lab_id"), "equipment": ("equipment", "equipment_id"), "vehicles": ("vehicles", "vehicle_id")}
 
 # Explicit input contract for the in-app Data Manager. This avoids accepting
 # arbitrary MongoDB fields from the browser while keeping every campus entity editable.
 DATA_SCHEMA = {
     "faculty": {"id": "faculty_id", "prefix": "fac", "required": ["name", "department"], "fields": ["faculty_id", "name", "department", "subjects", "expertise", "skills", "contact", "email", "image", "max_events_per_day", "status"], "lists": {"subjects", "expertise", "skills"}, "numbers": {"max_events_per_day"}, "defaults": {"max_events_per_day": 2, "status": "active"}},
     "volunteers": {"id": "volunteer_id", "prefix": "vol", "required": ["name", "department"], "fields": ["volunteer_id", "name", "department", "year", "skills", "interests", "preferred_roles", "email", "image", "max_events_per_day", "status"], "lists": {"skills", "interests", "preferred_roles"}, "numbers": {"year", "max_events_per_day"}, "defaults": {"max_events_per_day": 1, "status": "active"}},
+    "organizers": {"id": "organizer_id", "prefix": "org", "required": ["name", "department"], "fields": ["organizer_id", "name", "department", "organization", "phone", "email", "image", "status"], "lists": set(), "numbers": set(), "defaults": {"status": "active"}},
     "guests": {"id": "guest_id", "prefix": "guest", "required": ["name", "organization"], "fields": ["guest_id", "name", "designation", "organization", "expertise", "relevant_departments", "relevant_subjects", "suitable_event_types", "contact", "email", "image", "previous_events", "status"], "lists": {"expertise", "relevant_departments", "relevant_subjects", "suitable_event_types"}, "numbers": {"previous_events"}, "defaults": {"previous_events": 0, "status": "active"}},
     "blocks": {"id": "block_id", "prefix": "block", "required": ["block_name"], "fields": ["block_id", "block_name", "image", "location", "number_of_labs", "description"], "lists": set(), "numbers": {"number_of_labs"}, "defaults": {"number_of_labs": 0}},
     "labs": {"id": "lab_id", "prefix": "lab", "required": ["lab_name", "block_id", "capacity", "number_of_systems"], "fields": ["lab_id", "lab_name", "block_id", "floor", "capacity", "number_of_systems", "operating_system", "installed_software", "projectors", "microphones", "internet", "image", "status"], "lists": {"operating_system", "installed_software"}, "numbers": {"floor", "capacity", "number_of_systems", "projectors", "microphones"}, "booleans": {"internet"}, "defaults": {"projectors": 0, "microphones": 0, "internet": True, "status": "active"}},
@@ -354,7 +355,12 @@ def _normalise(values, schema):
         else:
             record[field] = str(value).strip()
     identifier = schema["id"]
-    record.setdefault(identifier, f"{schema['prefix']}-{uuid.uuid4().hex[:8]}")
+    if identifier == "organizer_id" and not record.get(identifier):
+        existing_ids = [str(row.get(identifier, "")) for row in store().get_all("organizers")]
+        numbers = [int(match.group(1)) for value in existing_ids if (match := re.fullmatch(r"ORG(\d+)", value))]
+        record[identifier] = f"ORG{max(numbers, default=100) + 1}"
+    else:
+        record.setdefault(identifier, f"{schema['prefix']}-{uuid.uuid4().hex[:8]}")
     if not re.fullmatch(r"[A-Za-z0-9_-]{2,64}", record[identifier]):
         raise ValueError(f"{identifier} can contain only letters, numbers, hyphens and underscores.")
     if "date" in record:
@@ -372,6 +378,8 @@ def _sync_resource_account(data_type, record):
         ensure_resource_account(store(), "faculty", record)
     elif data_type == "volunteers":
         ensure_resource_account(store(), "volunteer", record)
+    elif data_type == "organizers":
+        ensure_resource_account(store(), "organizer", record)
 
 
 def _audit_data_change(action, data_type, record_id):

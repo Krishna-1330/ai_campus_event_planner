@@ -13,18 +13,23 @@ from services.audit_service import audit, notify
 from services.constraint_engine import validate_plan
 from services.matching_service import score_person
 from routes.helpers import api_error, store
+from routes.auth import current_user, event_manager_required
 
 
 bp = Blueprint("events", __name__, url_prefix="/api/events")
 
 
 @bp.post("")
+@event_manager_required
 def create_event():
     payload = request.get_json(silent=True) or {}
     prompt = str(payload.get("prompt", "")).strip()
     if len(prompt) < 12:
         return api_error("Describe the event in at least 12 characters.")
+    user = current_user()
     event = {"event_id": str(uuid.uuid4()), "title": _event_title(prompt), "prompt": prompt, "status": "draft", "created_at": datetime.now().isoformat(timespec="seconds"),
+             "organizer_username": user.get("username") if user.get("role") == "organizer" else None,
+             "organizer_name": user.get("display_name") if user.get("role") == "organizer" else "Campus Administrator",
              "readiness": 0, "approval_status": "not requested"}
     store().insert("events", event)
     audit(store(), "Event created", event["event_id"], "Natural-language event request created")
@@ -33,27 +38,38 @@ def create_event():
 
 
 @bp.get("")
+@event_manager_required
 def list_events():
-    rows = sorted(store().get_all("events"), key=lambda row: row.get("created_at", ""), reverse=True)
+    user = current_user()
+    rows = store().get_all("events")
+    if user.get("role") == "organizer":
+        rows = [row for row in rows if row.get("organizer_username") == user.get("username")]
+    rows = sorted(rows, key=lambda row: row.get("created_at", ""), reverse=True)
     return jsonify({"ok": True, "events": rows})
 
 
 @bp.get("/<event_id>")
+@event_manager_required
 def get_event(event_id):
     event = store().get_one("events", {"event_id": event_id})
     if not event:
         return api_error("Event not found.", 404)
+    if not _can_manage(event):
+        return api_error("This event belongs to another organizer.", 403)
     event["tasks"] = store().get_all("tasks", {"event_id": event_id})
     event["assignments"] = store().get_all("assignments", {"event_id": event_id})
     return jsonify({"ok": True, "event": event})
 
 
 @bp.put("/<event_id>")
+@event_manager_required
 def update_event(event_id):
     """Rename an event from the dashboard without bypassing plan validation."""
     event = store().get_one("events", {"event_id": event_id})
     if not event:
         return api_error("Event not found.", 404)
+    if not _can_manage(event):
+        return api_error("This event belongs to another organizer.", 403)
     payload = request.get_json(silent=True) or {}
     title = str(payload.get("title", "")).strip()
     if not title:
@@ -65,11 +81,31 @@ def update_event(event_id):
     return jsonify({"ok": True, "event": updated})
 
 
+@bp.delete("/<event_id>")
+@event_manager_required
+def delete_event(event_id):
+    event = store().get_one("events", {"event_id": event_id})
+    if not event:
+        return api_error("Event not found.", 404)
+    if not _can_manage(event):
+        return api_error("This event belongs to another organizer.", 403)
+    for collection in ("tasks", "event_requirements", "notifications"):
+        store().delete_many(collection, {"event_id": event_id})
+    store().delete_many("assignments", {"event_id": {"$in": [event_id, event.get("incident_id")]}})
+    store().delete_many("events", {"event_id": event_id})
+    user = current_user()
+    audit(store(), "Event deleted", event_id, f"Deleted event and related operational records: {event.get('title', event_id)}", actor=user.get("display_name", "Campus Operations"))
+    return jsonify({"ok": True, "event_id": event_id})
+
+
 @bp.post("/<event_id>/plan")
+@event_manager_required
 def plan_event(event_id):
     event = store().get_one("events", {"event_id": event_id})
     if not event:
         return api_error("Event not found.", 404)
+    if not _can_manage(event):
+        return api_error("This event belongs to another organizer.", 403)
     result = generate_plan(store(), event, current_app.config.get("GEMINI_API_KEY", ""))
     if result["plan"]:
         readiness = _readiness(result["plan"], result["requirements"], result["validation"], approved=False)
@@ -85,10 +121,13 @@ def plan_event(event_id):
 
 
 @bp.post("/<event_id>/approve")
+@event_manager_required
 def approve_plan(event_id):
     event = store().get_one("events", {"event_id": event_id})
     if not event or not event.get("proposed_plan"):
         return api_error("A generated plan is required before approval.", 404)
+    if not _can_manage(event):
+        return api_error("This event belongs to another organizer.", 403)
     validation = validate_plan(store(), event["proposed_plan"], _requirements(event_id))
     if not validation["valid"]:
         store().update_one("events", {"event_id": event_id}, {"status": "conflict", "validation": validation, "approval_status": "blocked"})
@@ -103,10 +142,13 @@ def approve_plan(event_id):
 
 
 @bp.post("/<event_id>/complete")
+@event_manager_required
 def complete_event(event_id):
     event = store().get_one("events", {"event_id": event_id})
     if not event or event.get("status") != "approved":
         return api_error("Only an approved event can be completed.", 409)
+    if not _can_manage(event):
+        return api_error("This event belongs to another organizer.", 403)
     end_datetime = event.get("end_datetime") or (event.get("active_plan") or {}).get("end_datetime")
     end_time = datetime.fromisoformat(end_datetime.replace("Z", "+00:00")) if end_datetime else None
     current_time = datetime.now(end_time.tzinfo) if end_time and end_time.tzinfo else datetime.now()
@@ -274,6 +316,11 @@ def replace_assignment(event_id, assignment_id):
 def _requirements(event_id):
     requirements = store().get_all("event_requirements", {"event_id": event_id})
     return requirements[-1] if requirements else {}
+
+
+def _can_manage(event):
+    user = current_user()
+    return user.get("role") == "admin" or event.get("organizer_username") in {None, user.get("username")}
 
 
 def _timeline_quality(timeline):

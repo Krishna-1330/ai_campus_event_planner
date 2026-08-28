@@ -17,6 +17,7 @@ bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 ROLE_COLLECTIONS = {
     "faculty": ("faculty", "faculty_id"),
     "volunteer": ("volunteers", "volunteer_id"),
+    "organizer": ("organizers", "organizer_id"),
 }
 
 # Members may keep their contact and matching details current, but cannot
@@ -24,6 +25,7 @@ ROLE_COLLECTIONS = {
 PROFILE_FIELDS = {
     "faculty": {"name", "department", "subjects", "expertise", "skills", "contact", "email", "image"},
     "volunteer": {"name", "department", "year", "skills", "interests", "preferred_roles", "email", "image"},
+    "organizer": {"name", "department", "organization", "phone", "email", "image"},
 }
 PROFILE_LIST_FIELDS = {"subjects", "expertise", "skills", "interests", "preferred_roles"}
 
@@ -49,9 +51,30 @@ def admin_required(view):
     return wrapped
 
 
-def bootstrap_users(data_store, admin_username: str, admin_password: str):
+def event_manager_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user = current_user()
+        if not user:
+            return api_error("Sign in is required.", 401)
+        if user.get("role") not in {"admin", "organizer"}:
+            return api_error("Only administrators and organizers can manage events.", 403)
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def bootstrap_users(data_store, admin_username: str, admin_password: str, organizer_accounts: str = ""):
     """Create local accounts once; existing account passwords are never replaced."""
     _create_user_if_missing(data_store, admin_username, admin_password, "admin", "Campus Administrator")
+    for item in organizer_accounts.split(","):
+        parts = [part.strip() for part in item.split(":", 1)]
+        if len(parts) == 2 and parts[0] and parts[1]:
+            username, password = parts
+            profile = data_store.get_one("organizers", {"organizer_id": username})
+            if not profile:
+                profile = {"organizer_id": username, "name": username.replace("_", " ").title(), "department": "Events", "email": "", "status": "active"}
+                data_store.insert("organizers", profile)
+            _create_user_if_missing(data_store, username, password, "organizer", profile.get("name", username), username)
     for role, (collection, id_key) in ROLE_COLLECTIONS.items():
         for record in data_store.get_all(collection):
             ensure_resource_account(data_store, role, record)
