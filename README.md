@@ -123,7 +123,7 @@ For equipment, all overlapping locked quantities are subtracted from `total_quan
 - `POST /api/auth/assignments/<assignment_id>/respond` lets a faculty/volunteer accept or decline their own assignment (`{"decision": "accept"}` or `{"decision": "decline"}`).
 - `GET /api/campus/blocks`, `/api/campus/blocks/<id>/labs`, `/api/dashboard`, `/api/schedule`, `/api/conflicts`, `/api/audit`, `/api/notifications` and `/api/agents` supply the admin-only operations views. `DELETE /api/notifications` clears all app notifications.
 
-## Deploy to Render (easy English)
+## Deploy to Render
 
 For the complete one-time local MongoDB to Atlas migration and Render checklist, see [DEPLOY_RENDER.md](DEPLOY_RENDER.md).
 
